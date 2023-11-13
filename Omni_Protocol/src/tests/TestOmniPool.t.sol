@@ -827,6 +827,20 @@ contract TestOmniPool is Test {
         assertEq(pool.reserveReceiver(), ALICE.toAccount(0), "reserveReceiver is incorrect");
     }
 
+    function test_RepayWhenPaused() public {
+        oToken.deposit(0, 2, 100e18);
+        address[] memory markets = new address[](1);
+        markets[0] = address(oToken);
+        pool.enterMarkets(0, markets);
+        pool.borrow(0, address(oToken), 50e18);
+        pool.pause();
+        assertEq(pool.paused(), true, "paused is incorrect");
+        pool.repay(0, address(oToken), 50e18);
+        OmniToken.OmniTokenTranche memory tranche = _getOmniTokenTranche(address(oToken), 0);
+        assertEq(tranche.totalBorrowAmount, 0, "totalBorrowAmount is incorrect");
+        assertEq(tranche.totalBorrowShare, 0, "totalBorrowShare is incorrect");
+    }
+
     function test_RevertIsolatedMarketNotIsolated() public {
         vm.expectRevert("OmniPool::enterIsolatedMarket: Isolated market invalid.");
         IOmniPool(pool).enterIsolatedMarket(0, address(oToken));
@@ -1143,9 +1157,6 @@ contract TestOmniPool is Test {
         pool.pause();
         vm.expectRevert("Pausable: paused");
         pool.borrow(0, address(oToken), 10e18);
-
-        vm.expectRevert("Pausable: paused");
-        pool.repay(0, address(oToken), 10e18);
 
         vm.expectRevert("Pausable: paused");
         pool.liquidate(
