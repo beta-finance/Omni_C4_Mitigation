@@ -45,7 +45,6 @@ interface IOmniPool {
     struct ModeConfiguration {
         uint32 collateralFactor;
         uint32 borrowFactor;
-        uint32 modeMarketCount;
         uint8 modeTranche;
         uint32 expirationTimestamp; // Only prevents people from entering a mode, does not affect users already in existing mode
         address[] markets;

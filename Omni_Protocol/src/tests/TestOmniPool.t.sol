@@ -102,7 +102,7 @@ contract TestOmniPool is Test {
         modeMarkets[0] = address(oToken);
         modeMarkets[1] = address(oToken2);
         IOmniPool.ModeConfiguration memory modeStableMode =
-            IOmniPool.ModeConfiguration(0.95e9, 0.95e9, 2, 0, uint32(block.timestamp + 7 days), modeMarkets);
+            IOmniPool.ModeConfiguration(0.95e9, 0.95e9, 0, uint32(block.timestamp + 7 days), modeMarkets);
         pool.setModeConfiguration(modeStableMode);
         pool.setModeConfiguration(modeStableMode);
 
@@ -1064,7 +1064,7 @@ contract TestOmniPool is Test {
         modeMarkets[0] = address(oToken);
         modeMarkets[1] = address(oToken2);
         IOmniPool.ModeConfiguration memory modeStableMode =
-            IOmniPool.ModeConfiguration(0.95e9, 0.95e9, 2, 0, uint32(block.timestamp + 7 days), modeMarkets);
+            IOmniPool.ModeConfiguration(0.95e9, 0.95e9, 0, uint32(block.timestamp + 7 days), modeMarkets);
         vm.expectRevert();
         pool.setModeConfiguration(modeStableMode);
 
@@ -1135,7 +1135,7 @@ contract TestOmniPool is Test {
 
     function test_RevertSetModeConfiguration() public {
         IOmniPool.ModeConfiguration memory modeStableMode =
-            IOmniPool.ModeConfiguration(0.95e9, 0.95e9, 2, 0, uint32(block.timestamp + 7 days), new address[](0));
+            IOmniPool.ModeConfiguration(0.95e9, 0.95e9, 0, uint32(block.timestamp + 7 days), new address[](0));
         uint32 timeNow = uint32(block.timestamp);
         vm.warp(8 days);
         vm.expectRevert("OmniPool::setModeConfiguration: Bad expiration timestamp.");
