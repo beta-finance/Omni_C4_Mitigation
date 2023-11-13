@@ -309,6 +309,9 @@ contract OmniToken is IOmniToken, WithUnderlying, ReentrancyGuardUpgradeable {
         uint256[] memory seizedShares = new uint256[](trancheCount);
         for (uint8 ti = 0; ti < trancheCount; ++ti) {
             uint256 totalShare = tranches[ti].totalDepositShare;
+            if (totalShare == 0) {
+                continue;
+            }
             uint256 totalAmount = tranches[ti].totalDepositAmount;
             uint256 share = trancheAccountDepositShares[ti][_account];
             uint256 amount = (share * totalAmount) / totalShare;
