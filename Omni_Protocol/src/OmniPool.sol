@@ -285,7 +285,7 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
      * @param _market The address of the market from which to borrow.
      * @param _amount The amount of funds to borrow.
      */
-    function borrow(uint96 _subId, address _market, uint256 _amount) external whenNotPaused {
+    function borrow(uint96 _subId, address _market, uint256 _amount) external nonReentrant whenNotPaused {
         bytes32 accountId = msg.sender.toAccount(_subId);
         AccountInfo memory account = accountInfos[accountId];
         address[] memory poolMarkets = getAccountPoolMarkets(accountId, account);
@@ -302,7 +302,7 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
      * @param _market The address of the market to which to repay.
      * @param _amount The amount of funds to repay. If _amount is 0, the contract will repay the entire borrow balance.
      */
-    function repay(uint96 _subId, address _market, uint256 _amount) external whenNotPaused {
+    function repay(uint96 _subId, address _market, uint256 _amount) external {
         bytes32 accountId = msg.sender.toAccount(_subId);
         AccountInfo memory account = accountInfos[accountId];
         address[] memory poolMarkets = getAccountPoolMarkets(accountId, account);
@@ -323,6 +323,7 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
      */
     function liquidate(LiquidationParams calldata _params)
         external
+        nonReentrant
         whenNotPaused
         returns (uint256[] memory seizedShares)
     {
