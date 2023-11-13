@@ -100,8 +100,15 @@ contract OmniTokenNoBorrow is IOmniTokenNoBorrow, WithUnderlying, ReentrancyGuar
         returns (uint256[] memory)
     {
         require(msg.sender == omniPool, "OmniTokenNoBorrow::seize: Bad caller.");
-        balanceOfAccount[_account] -= _amount;
-        balanceOfAccount[_to] += _amount;
+        uint256 accountBalance = balanceOfAccount[_account];
+        if (accountBalance < _amount) {
+            _amount = accountBalance;
+            balanceOfAccount[_account] = 0;
+            balanceOfAccount[_to] += accountBalance;
+        } else {
+            balanceOfAccount[_account] -= _amount;
+            balanceOfAccount[_to] += _amount;
+        }
         uint256[] memory seizedShares = new uint256[](1);
         seizedShares[0] = _amount;
         emit Seize(_account, _to, _amount, seizedShares);
