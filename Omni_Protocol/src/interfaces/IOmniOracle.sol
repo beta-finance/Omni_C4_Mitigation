@@ -24,6 +24,7 @@ interface IOmniOracle {
         Provider provider; // 8 bits
         uint32 delay; // 32 bits, because this is time-based in unix
         uint32 delayQuote; // 32 bits, for Band quote delay
+        uint8 underlyingDecimals; // 8 bits, decimals of underlying token
     }
 
     /**

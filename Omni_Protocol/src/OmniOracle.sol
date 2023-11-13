@@ -21,8 +21,9 @@ import "./interfaces/IBandReference.sol";
 contract OmniOracle is IOmniOracle, AccessControl, Initializable {
     uint256 public constant PRICE_SCALE = 1e36; // Gives enough precision for the price of one base unit of token, as most tokens have at most 18 decimals
     string public constant USD = "USD";
-    address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; // Need to hardcode WETH address per network deployed for Band
+
     mapping(address => OracleConfig) public oracleConfigs;
+    mapping(address => string) public oracleSymbols;
 
     /**
      * @notice Initializes the admin role with the contract deployer/upgrader.
@@ -42,20 +43,26 @@ contract OmniOracle is IOmniOracle, AccessControl, Initializable {
         OracleConfig memory config = oracleConfigs[_underlying];
         if (config.provider == Provider.Band) {
             IStdReference.ReferenceData memory data;
-            if (_underlying == WETH) {
-                data = IStdReference(config.oracleAddress).getReferenceData("ETH", USD);
-            } else {
-                data = IStdReference(config.oracleAddress).getReferenceData(IERC20Metadata(_underlying).symbol(), USD);
-            }
-            require(data.lastUpdatedBase >= block.timestamp - config.delay, "OmniOracle::getPrice: Stale price for base.");
-            require(data.lastUpdatedQuote >= block.timestamp - config.delayQuote, "OmniOracle::getPrice: Stale price for quote.");
-            return data.rate * (PRICE_SCALE / 1e18) / (10 ** IERC20Metadata(_underlying).decimals()); // Price in one base unit with 1e36 precision
+            data = IStdReference(config.oracleAddress).getReferenceData(oracleSymbols[_underlying], USD);
+            require(
+                data.lastUpdatedBase >= block.timestamp - config.delay, "OmniOracle::getPrice: Stale price for base."
+            );
+            require(
+                data.lastUpdatedQuote >= block.timestamp - config.delayQuote,
+                "OmniOracle::getPrice: Stale price for quote."
+            );
+            return data.rate * (PRICE_SCALE / 1e18) / (10 ** config.underlyingDecimals); // Price in one base unit with 1e36 precision
         } else if (config.provider == Provider.Chainlink) {
             (, int256 answer,, uint256 updatedAt,) = IChainlinkAggregator(config.oracleAddress).latestRoundData();
-            require(answer > 0 && updatedAt >= block.timestamp - config.delay, "OmniOracle::getPrice: Invalid chainlink price.");
-            return uint256(answer) * (PRICE_SCALE / (10 ** IChainlinkAggregator(config.oracleAddress).decimals())) / (10 ** IERC20Metadata(_underlying).decimals());
+            require(
+                answer > 0 && updatedAt >= block.timestamp - config.delay,
+                "OmniOracle::getPrice: Invalid chainlink price."
+            );
+            return uint256(answer) * (PRICE_SCALE / (10 ** IChainlinkAggregator(config.oracleAddress).decimals()))
+                / (10 ** config.underlyingDecimals);
         } else if (config.provider == Provider.Other) {
-            return IOmniOracle(config.oracleAddress).getPrice(_underlying) * (PRICE_SCALE / 1e18) / (10 ** IERC20Metadata(_underlying).decimals());
+            return IOmniOracle(config.oracleAddress).getPrice(_underlying) * (PRICE_SCALE / 1e18)
+                / (10 ** config.underlyingDecimals);
         } else {
             revert("OmniOracle::getPrice: Invalid provider.");
         }
@@ -66,16 +73,26 @@ contract OmniOracle is IOmniOracle, AccessControl, Initializable {
      * @param _underlying The address of the asset.
      * @param _oracleConfig The oracle configuration for the asset. Must be Chainlink, Band, or implement the IOmniOracle interface.
      */
-    function setOracleConfig(address _underlying, OracleConfig calldata _oracleConfig)
+    function setOracleConfig(address _underlying, OracleConfig calldata _oracleConfig, string calldata _symbol)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        require(_oracleConfig.oracleAddress != address(0) && _underlying != address(0), "OmniOracle::setOracleConfig: Can never use zero address.");
+        require(
+            _oracleConfig.oracleAddress != address(0) && _underlying != address(0),
+            "OmniOracle::setOracleConfig: Can never use zero address."
+        );
         require(_oracleConfig.provider != Provider.Invalid, "OmniOracle::setOracleConfig: Invalid provider.");
         require(_oracleConfig.delay > 0, "OmniOracle::setOracleConfig: Invalid delay.");
         require(_oracleConfig.delayQuote > 0, "OmniOracle::setOracleConfig: Invalid delay quote.");
         oracleConfigs[_underlying] = _oracleConfig;
-        emit SetOracle(_underlying, _oracleConfig.oracleAddress, _oracleConfig.provider, _oracleConfig.delay, _oracleConfig.delayQuote);
+        oracleSymbols[_underlying] = _symbol;
+        emit SetOracle(
+            _underlying,
+            _oracleConfig.oracleAddress,
+            _oracleConfig.provider,
+            _oracleConfig.delay,
+            _oracleConfig.delayQuote
+        );
     }
 
     /**

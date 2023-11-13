@@ -533,6 +533,13 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
         onlyRole(MARKET_CONFIGURATOR_ROLE)
     {
         if (_modeConfiguration.expirationTimestamp <= block.timestamp) { revert("OmniPool::setModeConfiguration: Bad expiration timestamp."); }
+        for (uint i = 0; i < _modeConfiguration.markets.length; i++) {
+            for (uint j = i + 1; j < _modeConfiguration.markets.length; j++) {
+                if (_modeConfiguration.markets[i] == _modeConfiguration.markets[j]) {
+                    revert("OmniPool:setModeConfiguration: No duplicate markets allowed.");
+                }
+            }
+        }
         modeCount++;
         modeConfigurations[modeCount] = _modeConfiguration;
         emit SetModeConfiguration(modeCount, _modeConfiguration);
