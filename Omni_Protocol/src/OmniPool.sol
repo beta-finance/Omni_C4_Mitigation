@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import "openzeppelin/contracts/access/AccessControl.sol";
-import "openzeppelin/contracts/security/Pausable.sol";
+import "openzeppelin-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import "openzeppelin-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
+import "openzeppelin-upgradeable/contracts/security/PausableUpgradeable.sol";
+import "openzeppelin/contracts/utils/math/Math.sol";
 
 import "./interfaces/IOmniOracle.sol";
 import "./interfaces/IOmniPool.sol";
@@ -21,7 +22,7 @@ import "./SubAccount.sol";
  * the lending pool, along with internal utility functions. Includes AccessContral, Pausable, and ReentrancyGuardUpgradeable (includes Initializable)
  * from OpenZeppelin.
  */
-contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausable {
+contract OmniPool is IOmniPool, AccessControlUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable  {
     using SubAccount for address;
 
     bytes32 public constant SOFT_LIQUIDATION_ROLE = keccak256("SOFT_LIQUIDATION_ROLE");
@@ -58,6 +59,8 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
      */
     function initialize(address _oracle, address _reserveReceiver, address _admin) external initializer {
         __ReentrancyGuard_init();
+        __AccessControl_init();
+        __Pausable_init();
         oracle = _oracle;
         pauseTranche = type(uint8).max;
         reserveReceiver = _reserveReceiver.toAccount(0);
