@@ -153,6 +153,22 @@ contract TestOmniTokenNoBorrow is Test {
         assertEq(oToken.getAccountDepositInUnderlying(alice0), amount, "balanceOfAccount is incorrect");
     }
 
+    function test_SeizeOver() public {
+        uint256 amount = 1e2 * (10 ** uToken.decimals());
+        oToken.deposit(0, amount);
+        bytes32 badAccount = address(this).toAccount(0);
+        bytes32 alice0 = ALICE.toAccount(0);
+        assertEq(oToken.balanceOfAccount(badAccount), amount, "balanceOfAccount before is incorrect");
+        assertEq(oToken.balanceOfAccount(alice0), 0, "balanceOfAccount before is incorrect");
+        vm.startPrank(address(pool));
+        uint256[] memory seizedShares = oToken.seize(badAccount, alice0, amount * 2);
+        vm.stopPrank();
+        assertEq(oToken.totalSupply(), amount, "totalSupply is incorrect");
+        assertEq(seizedShares[0], amount, "seizedShares is incorrect");
+        assertEq(oToken.getAccountDepositInUnderlying(badAccount), 0, "balanceOfAccount is incorrect");
+        assertEq(oToken.getAccountDepositInUnderlying(alice0), amount, "balanceOfAccount is incorrect");
+    }
+
     function test_SetSupplyCap() public {
         vm.startPrank(address(pool));
         oToken.setSupplyCap(1e6 * (10 ** uToken.decimals()));
