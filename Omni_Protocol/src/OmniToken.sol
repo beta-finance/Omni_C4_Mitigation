@@ -369,6 +369,9 @@ contract OmniToken is IOmniToken, WithUnderlying, ReentrancyGuardUpgradeable {
      * @return The borrowing amount of the account in the underlying asset for the given borrow tier.
      */
     function getAccountBorrowInUnderlying(bytes32 _account, uint8 _borrowTier) external view returns (uint256) {
+        if (_borrowTier >= trancheCount) {
+            return 0;
+        }
         OmniTokenTranche storage tranche = tranches[_borrowTier];
         uint256 share = trancheAccountBorrowShares[_borrowTier][_account];
         if (share == 0) {

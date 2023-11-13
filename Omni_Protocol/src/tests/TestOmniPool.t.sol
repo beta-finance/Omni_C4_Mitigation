@@ -890,6 +890,32 @@ contract TestOmniPool is Test {
         vm.stopPrank();
     }
 
+    function test_EvaluateAccountNoRevert() public {
+        //1. have 2 Tier
+        uint256[] memory borrowCaps = new uint256[](2);
+        borrowCaps[0] = 1e9 * (10 ** uToken.decimals());
+        borrowCaps[1] = 1e3 * (10 ** uToken.decimals());
+        OmniToken oToken5 = new OmniToken();
+        oToken5.initialize(address(pool), address(uToken), address(irm), borrowCaps);
+        IOmniPool.MarketConfiguration memory mConfig5 =
+            IOmniPool.MarketConfiguration(0.4e9, 0, uint32(block.timestamp + 1000 days), 2, false);
+        pool.setMarketConfiguration(address(oToken5), mConfig5);
+        //2. pool have IsolatedMarket, riskTranche = 2
+        IOmniPool(pool).enterIsolatedMarket(0, address(oToken3));         
+        bytes32 account = address(this).toAccount(0);
+        IOmniPool.AccountInfo memory info = _getAccountInfo(account);        
+        console.log("borrowTier:",pool.getAccountBorrowTier(info));               
+        //3. is's ok if without oToken5
+        address[] memory markets = new address[](1);
+        markets[0] = address(oToken);
+        pool.enterMarkets(0, markets);
+        pool.isAccountHealthy(account);
+        //4.enter  oToken5 will revert Index out of bounds 
+        markets[0] = address(oToken5);
+        pool.enterMarkets(0, markets);
+        pool.isAccountHealthy(account);
+    }
+
     function test_RevertIsolatedMarketNotIsolated() public {
         vm.expectRevert("OmniPool::enterIsolatedMarket: Isolated market invalid.");
         IOmniPool(pool).enterIsolatedMarket(0, address(oToken));
