@@ -518,12 +518,10 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
             revert("OmniPool::setMarketConfiguration: Invalid configuration for borrowable long tail asset.");
         }
         MarketConfiguration memory currentConfig = marketConfigurations[_market];
-        if (currentConfig.borrowFactor != 0 || currentConfig.collateralFactor != 0) {
-            require(
-                _marketConfig.isIsolatedCollateral == currentConfig.isIsolatedCollateral,
-                "OmniPool::setMarketConfiguration: Cannot change isolated collateral status."
-            );
-        }
+        require(
+            _marketConfig.isIsolatedCollateral == currentConfig.isIsolatedCollateral,
+            "OmniPool::setMarketConfiguration: Cannot change isolated collateral status."
+        );
         marketConfigurations[_market] = _marketConfig;
         emit SetMarketConfiguration(_market, _marketConfig);
     }
