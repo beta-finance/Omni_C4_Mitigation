@@ -81,8 +81,9 @@ contract OmniToken is IOmniToken, WithUnderlying, ReentrancyGuardUpgradeable {
         uint8 trancheIndex = trancheCount;
         uint256 totalBorrow = 0;
         uint256 totalDeposit = 0;
-        uint256[] memory trancheDepositAmounts_ = new uint256[](trancheCount);
-        uint256[] memory trancheAccruedDepositCache = new uint256[](trancheCount);
+        uint256[] memory trancheDepositAmounts_ = new uint256[](trancheIndex); // trancheIndeex == trancheCount initially
+        uint256[] memory trancheAccruedDepositCache = new uint256[](trancheIndex);
+        uint256[] memory reserveFeeCache = new uint256[](trancheIndex);
         while (trancheIndex != 0) {
             unchecked {
                 --trancheIndex;
@@ -106,37 +107,38 @@ contract OmniToken is IOmniToken, WithUnderlying, ReentrancyGuardUpgradeable {
 
             // Handle reserve payments
             uint256 reserveInterestAmount = interestAmount * RESERVE_FEE / FEE_SCALE;
+            reserveFeeCache[trancheIndex] = reserveInterestAmount;
 
-            interestAmount -= reserveInterestAmount;
             // Handle deposit interest
+            interestAmount -= reserveInterestAmount;
             {
                 uint256 depositInterestAmount = 0;
                 uint256 interestAmountProportion;
-                for (uint8 ti = trancheCount - 1; ti > trancheIndex; ti--) {
+                for (uint8 ti = trancheCount; ti > trancheIndex;) {
+                    unchecked { --ti; }
                     interestAmountProportion = interestAmount * trancheDepositAmounts_[ti] / totalDeposit;
                     trancheAccruedDepositCache[ti] += interestAmountProportion;
                     depositInterestAmount += interestAmountProportion;
                 }
-                // For the last tranche, we need to add the reserve interest amount to the deposit interest amount
-                interestAmountProportion = interestAmount * trancheDepositAmount_ / totalDeposit;
-                depositInterestAmount += interestAmountProportion;
-                trancheAccruedDepositCache[trancheIndex] += interestAmountProportion + reserveInterestAmount;
                 tranche.totalBorrowAmount = trancheBorrowAmount_ + depositInterestAmount + reserveInterestAmount;
             }
-
-            // Pay reserve fee
-            uint256 reserveShare;
-            uint256 totalDepositShare_ = tranche.totalDepositShare;
-            if (trancheDepositAmount_ == 0) {
-                reserveShare = reserveInterestAmount;
-            } else {
-                reserveShare = (reserveInterestAmount * totalDepositShare_) / trancheDepositAmount_; // Cannot divide by 0
-            }
-            trancheAccountDepositShares[trancheIndex][reserveReceiver] += reserveShare;
-            tranche.totalDepositShare = totalDepositShare_ + reserveShare;
         }
         for (uint8 ti = 0; ti < trancheCount; ti++) {
-            tranches[ti].totalDepositAmount = trancheAccruedDepositCache[ti];
+            OmniTokenTranche memory tranche_ = tranches[ti];
+            // Pay the reserve
+            uint256 reserveShare;
+            if (reserveFeeCache[ti] > 0) {
+                if (trancheAccruedDepositCache[ti] == 0) {
+                    reserveShare = reserveFeeCache[ti];
+                } else {
+                    reserveShare = (reserveFeeCache[ti] * tranche_.totalDepositShare) / trancheAccruedDepositCache[ti];
+                }
+                trancheAccruedDepositCache[ti] += reserveFeeCache[ti];
+                trancheAccountDepositShares[ti][reserveReceiver] += reserveShare;
+                tranche_.totalDepositShare += reserveShare;
+            }
+            tranche_.totalDepositAmount = trancheAccruedDepositCache[ti];
+            tranches[ti] = tranche_;
         }
         lastAccrualTime = block.timestamp;
         emit Accrue();
@@ -150,6 +152,7 @@ contract OmniToken is IOmniToken, WithUnderlying, ReentrancyGuardUpgradeable {
      * @return share Amount of deposit shares received in exchange for the deposit.
      */
     function deposit(uint96 _subId, uint8 _trancheId, uint256 _amount) external nonReentrant returns (uint256 share) {
+        require(_trancheId < IOmniPool(omniPool).pauseTranche(), "OmniToken::deposit: Tranche paused.");
         require(_trancheId < trancheCount, "OmniToken::deposit: Invalid tranche id.");
         accrue();
         bytes32 account = msg.sender.toAccount(_subId);

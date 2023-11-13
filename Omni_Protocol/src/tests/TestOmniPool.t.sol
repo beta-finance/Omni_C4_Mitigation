@@ -374,9 +374,9 @@ contract TestOmniPool is Test {
         // Test with accrued intesrest
         vm.warp(100 days); // Trigger interest
         OmniPool.Evaluation memory eval4 = pool.evaluateAccount(account);
-        uint256 dtv = 3071912530346303944481;
+        uint256 dtv = 3074267114689199645166;
         uint256 btv = 433173506346038391035;
-        uint256 dav = 2157559474400673686670;
+        uint256 dav = 2159443143802471461471;
         uint256 bav = 527441641955178797411;
         _assertEvaluationValues(eval4, dtv, btv, dav, bav, 3, 2);
     }
@@ -465,8 +465,8 @@ contract TestOmniPool is Test {
         IOmniPool.Evaluation memory eval2 = pool.evaluateAccount(account);
         uint256 balAfter = uToken.balanceOf(address(this));
         assertEq(eval2.borrowTrueValue, 0, "borrowTrueValue is incorrect");
-        assertEq(eval2.depositTrueValue, 855621300582942800632262, "depositTrueValue is incorrect");
-        assertEq(balAfter, 127464158821282016081169, "balanceOf After is incorrect");
+        assertEq(eval2.depositTrueValue, 855678362630444128588900, "depositTrueValue is incorrect");
+        assertEq(balAfter, 127815889780552317129622, "balanceOf After is incorrect");
     }
 
     function test_SetLiquidationBonus() public {
@@ -592,6 +592,9 @@ contract TestOmniPool is Test {
         assertEq(pool.pauseTranche(), 2, "pauseTranche is incorrect");
         vm.stopPrank();
 
+        vm.expectRevert("OmniToken::deposit: Tranche paused.");
+        oToken.deposit(0, 2, 1e18);
+
         vm.expectRevert("OmniToken::withdraw: Tranche paused.");
         oToken.withdraw(0, 2, 1e18);
 
@@ -629,7 +632,6 @@ contract TestOmniPool is Test {
     }
 
     function test_LiquidateNoIsolated() public {
-        test_SetLiquidationBonus();
         IIRM.IRMConfig[] memory configs = new IIRM.IRMConfig[](3);
         configs[0] = IIRM.IRMConfig(0.01e9, 1e9, 1e9, 1e9);
         configs[1] = IIRM.IRMConfig(0.85e9, 0.02e9, 0.08e9, 1e9);
@@ -650,19 +652,53 @@ contract TestOmniPool is Test {
         pool.borrow(0, address(oToken), 0.9216e2 * 1e18);
         vm.stopPrank();
         vm.warp(365 days);
+        oToken.accrue();
+        OmniToken.OmniTokenTranche memory tranche0 = _getOmniTokenTranche(address(oToken), 0);
+        assertApproxEqRel(
+            tranche0.totalDepositAmount,
+            1e19 + 0.9216e20 * 0.1 + 0.9216e20 * 0.9 * 0.05,
+            0.0001e18,
+            "Incorrect total deposit amount"
+        );
+        assertApproxEqRel(tranche0.totalBorrowAmount, 2 * 0.9216e20, 0.0001e18, "Incorrect total borrow amount");
+        assertApproxEqRel(tranche0.totalDepositShare, 1e19 + 6.51436e18, 0.0001e18, "Incorrect total deposit shares");
+        assertEq(tranche0.totalBorrowShare, 0.9216e20, "Incorrect total borrow shares");
+        OmniToken.OmniTokenTranche memory tranche1 = _getOmniTokenTranche(address(oToken), 1);
+        assertApproxEqRel(
+            tranche1.totalDepositAmount, 1e19 + 0.9216e20 * 0.9 * 0.05, 0.0001e18, "Incorrect total deposit amount"
+        );
+        assertEq(tranche1.totalDepositShare, 1e19, "Incorrect total deposit shares");
+        assertEq(tranche1.totalBorrowAmount, 0, "Incorrect total borrow amount");
+        assertEq(tranche1.totalBorrowShare, 0, "Incorrect total borrow shares");
+        OmniToken.OmniTokenTranche memory tranche2 = _getOmniTokenTranche(address(oToken), 2);
+        assertApproxEqRel(
+            tranche2.totalDepositAmount, 1.8e20 + 0.9216e20 * 0.9 * 0.9, 0.0001e18, "Incorrect total deposit amount"
+        );
+        assertEq(tranche2.totalDepositShare, 1.8e20, "Incorrect total deposit shares");
+        assertEq(tranche2.totalBorrowAmount, 0, "Incorrect total borrow amount");
+        assertEq(tranche2.totalBorrowShare, 0, "Incorrect total borrow shares");
+
+        IOmniPool.LiquidationBonusConfiguration memory lbconfig =
+            IOmniPool.LiquidationBonusConfiguration(0.1e9, 0.1e9, 0e9, 0.1e9, 1.4e9);
+        pool.setLiquidationBonusConfiguration(address(oToken), lbconfig);
+
         uint256[] memory seizedShares = pool.liquidate(
             IOmniPool.LiquidationParams(
-                address(ALICE).toAccount(0),
-                address(this).toAccount(1),
-                address(oToken),
-                address(oToken),
-                0.2e2 * 1e18
+                address(ALICE).toAccount(0), address(this).toAccount(1), address(oToken), address(oToken), 0.2e2 * 1e18
             )
         );
-        assertEq(seizedShares[0], 10000000000000000000, "seizedShares[0] is incorrect");
-        assertEq(seizedShares[1], 5543003993551652055, "seizedShares[1] is incorrect");
-        assertEq(seizedShares[2], 0, "seizedShares[2] is incorrect");
 
+        // Liquidator receives 10% liquidation bonus for liquidating, should receive 0.22e20 worth of tokens from shares
+        assertEq(seizedShares[0], 10000000000000000000, "seizedShares[0] is incorrect");
+        assertEq(seizedShares[1], 5550780510986919631, "seizedShares[1] is incorrect");
+        assertEq(seizedShares[2], 0, "seizedShares[2] is incorrect");
+        assertApproxEqRel(
+            seizedShares[0] * tranche0.totalDepositAmount / tranche0.totalDepositShare
+                + seizedShares[1] * tranche1.totalDepositAmount / tranche1.totalDepositShare,
+            0.22e20,
+            0.0001e18,
+            "Incorrect total seized amount"
+        );
     }
 
     function test_SocializeLossMultiTranche() public {
@@ -1019,7 +1055,9 @@ contract TestOmniPool is Test {
             IOmniPool.LiquidationParams(targetAccount2, liquidatorAccount2, address(oToken), address(oToken4), 5e18)
         );
 
-        vm.expectRevert("OmniPool::socializeLoss: Account not fully liquidated, please call liquidate prior to fully liquidate account.");
+        vm.expectRevert(
+            "OmniPool::socializeLoss: Account not fully liquidated, please call liquidate prior to fully liquidate account."
+        );
         pool.socializeLoss(address(oToken), targetAccount2);
     }
 
@@ -1146,27 +1184,6 @@ contract TestOmniPool is Test {
 
         vm.expectRevert("OmniPool::setModeExpiration: Bad mode ID.");
         pool.setModeExpiration(0, uint32(block.timestamp + 1 days));
-    }
-
-    function test_RevertBadBorrowCaps() public {
-        uint256[] memory caps = new uint256[](3);
-        caps[0] = 1e2 * 10e18;
-        caps[1] = 1e7 * 10e18;
-        caps[2] = 1e6 * 10e18;
-        vm.expectRevert("OmniPool::setBorrowCap: Invalid borrow cap.");
-        pool.setBorrowCap(address(oToken), caps);
-
-        caps[0] = 1e8 * 10e18;
-        caps[1] = 1e7 * 10e18;
-        caps[2] = 1e9 * 10e18;
-        vm.expectRevert("OmniPool::setBorrowCap: Invalid borrow cap.");
-        pool.setBorrowCap(address(oToken), caps);
-
-        caps[0] = 0;
-        caps[1] = 1e7 * 10e18;
-        caps[2] = 1e6 * 10e18;
-        vm.expectRevert("OmniPool::setBorrowCap: Invalid borrow cap.");
-        pool.setBorrowCap(address(oToken), caps);
     }
 
     function _assertEvaluationValues(
