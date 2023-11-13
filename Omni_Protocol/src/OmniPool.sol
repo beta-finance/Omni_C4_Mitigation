@@ -34,6 +34,7 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
     uint256 public constant MAX_BASE_SOFT_LIQUIDATION = 1.4e9;
     uint256 public constant MAX_LIQ_KINK = 0.2e9; // Borrow value exceeds deposit value by 20%
     uint256 public constant PRICE_SCALE = 1e18; // Must match up with PRICE_SCALE in OmniOracle
+    uint256 public constant MAX_MARKETS_PER_ACCOUNT = 9; // 10 including isolated
 
     mapping(bytes32 => AccountInfo) public accountInfos;
     mapping(bytes32 => address[]) public accountMarkets;
@@ -98,6 +99,7 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
         require(accountInfos[accountId].modeId == 0, "OmniPool::enterMarkets: Already in a mode.");
         address[] memory existingMarkets = accountMarkets[accountId];
         address[] memory newMarkets = new address[](existingMarkets.length + _markets.length);
+        require(newMarkets.length <= MAX_MARKETS_PER_ACCOUNT, "OmniPool::enterMarkets: Too many markets.");
         for (uint256 i = 0; i < existingMarkets.length; ++i) { // Copy over existing markets
             newMarkets[i] = existingMarkets[i];
         }
@@ -244,13 +246,13 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
                 market = _account.isolatedCollateralMarket;
             }
             MarketConfiguration memory marketConfiguration_ = marketConfigurations[market];
-            if (marketConfiguration_.expirationTimestamp <= block.timestamp) {
-                eval.isExpired = true; // Must repay all debts and exit market to get rid of unhealthy account status if expired
-            }
             address underlying = IWithUnderlying(market).underlying();
             uint256 price = IOmniOracle(oracle).getPrice(underlying); // Returns price in 1e18
             uint256 depositAmount = IOmniTokenBase(market).getAccountDepositInUnderlying(_accountId);
             if (depositAmount != 0) {
+                if (marketConfiguration_.expirationTimestamp <= block.timestamp) {
+                    eval.isExpired = true; // Must repay all debts and exit market to get rid of unhealthy account status if expired
+                }
                 ++eval.numDeposit;
                 uint256 depositValue = (depositAmount * price) / PRICE_SCALE; // Rounds down
                 eval.depositTrueValue += depositValue;
@@ -517,13 +519,6 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
         if (_marketConfig.collateralFactor == 0 && (_marketConfig.borrowFactor == 0 || _marketConfig.riskTranche != type(uint8).max)) {
             revert("OmniPool::setMarketConfiguration: Invalid configuration for borrowable long tail asset.");
         }
-        MarketConfiguration memory currentConfig = marketConfigurations[_market];
-        if (currentConfig.borrowFactor != 0 || currentConfig.collateralFactor != 0) {
-            require(
-                _marketConfig.isIsolatedCollateral == currentConfig.isIsolatedCollateral,
-                "OmniPool::setMarketConfiguration: Cannot change isolated collateral status."
-            );
-        }
         marketConfigurations[_market] = _marketConfig;
         emit SetMarketConfiguration(_market, _marketConfig);
     }
@@ -629,6 +624,9 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
         external
         onlyRole(MARKET_CONFIGURATOR_ROLE)
     {
+        for (uint256 i = 0; i < _borrowCaps.length - 1; i++) {
+            require(_borrowCaps[i] >= _borrowCaps[i + 1], "OmniPool::setBorrowCap: Invalid borrow cap.");
+        }
         IOmniToken(_market).setTrancheBorrowCaps(_borrowCaps);
     }
 

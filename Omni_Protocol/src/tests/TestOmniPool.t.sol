@@ -1148,6 +1148,27 @@ contract TestOmniPool is Test {
         pool.setModeExpiration(0, uint32(block.timestamp + 1 days));
     }
 
+    function test_RevertBadBorrowCaps() public {
+        uint256[] memory caps = new uint256[](3);
+        caps[0] = 1e2 * 10e18;
+        caps[1] = 1e7 * 10e18;
+        caps[2] = 1e6 * 10e18;
+        vm.expectRevert("OmniPool::setBorrowCap: Invalid borrow cap.");
+        pool.setBorrowCap(address(oToken), caps);
+
+        caps[0] = 1e8 * 10e18;
+        caps[1] = 1e7 * 10e18;
+        caps[2] = 1e9 * 10e18;
+        vm.expectRevert("OmniPool::setBorrowCap: Invalid borrow cap.");
+        pool.setBorrowCap(address(oToken), caps);
+
+        caps[0] = 0;
+        caps[1] = 1e7 * 10e18;
+        caps[2] = 1e6 * 10e18;
+        vm.expectRevert("OmniPool::setBorrowCap: Invalid borrow cap.");
+        pool.setBorrowCap(address(oToken), caps);
+    }
+
     function _assertEvaluationValues(
         OmniPool.Evaluation memory eval,
         uint256 dtv,
