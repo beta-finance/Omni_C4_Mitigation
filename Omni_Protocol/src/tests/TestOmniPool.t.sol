@@ -841,6 +841,55 @@ contract TestOmniPool is Test {
         assertEq(tranche.totalBorrowShare, 0, "totalBorrowShare is incorrect");
     }
 
+    function test_LiquidatePauseTrancheLowest() public {
+        IIRM.IRMConfig[] memory configs2 = new IIRM.IRMConfig[](3);
+        configs2[0] = IIRM.IRMConfig(0.001e9, 1e9, 1e9, 1e9);
+        configs2[1] = IIRM.IRMConfig(0.001e9, 1e9, 1e9, 1e9);
+        configs2[2] = IIRM.IRMConfig(0.001e9, 1e9, 1e9, 1e9);
+        uint8[] memory tranches = new uint8[](3);
+        tranches[0] = 0;
+        tranches[1] = 1;
+        tranches[2] = 2;
+        IOmniPool.MarketConfiguration memory mconfig =
+            IOmniPool.MarketConfiguration(0.9e9, 0.9e9, type(uint32).max, 0, false);
+        IOmniPool.MarketConfiguration memory mconfig2 =
+            IOmniPool.MarketConfiguration(0.9e9, 0, type(uint32).max, 2, true);
+        pool.setMarketConfiguration(address(oToken), mconfig);
+        pool.setMarketConfiguration(address(oToken3), mconfig2);
+        irm.setIRMForMarket(address(oToken), tranches, configs2);
+
+        vm.startPrank(ALICE);
+        oToken.deposit(0, 2, 10000e18);
+        vm.stopPrank();
+
+        oToken.deposit(0, 2, 100e18);
+        oToken3.deposit(1, 1000e18);
+        address[] memory markets = new address[](1);
+        markets[0] = address(oToken);
+        pool.enterMarkets(0, markets);
+        pool.enterMarkets(1, markets);
+        pool.enterIsolatedMarket(1, address(oToken3));
+
+        pool.borrow(0, address(oToken), 50e18);
+        pool.borrow(1, address(oToken), 50e18);
+
+        vm.warp(730 days);
+        vm.startPrank(ALICE);
+        pool.liquidate(
+            IOmniPool.LiquidationParams(
+                address(this).toAccount(0), address(ALICE).toAccount(0), address(oToken), address(oToken), 10e18
+            )
+        );
+        assertEq(pool.pauseTranche(), 0, "pauseTranche is incorrect liq 1");
+        pool.liquidate(
+            IOmniPool.LiquidationParams(
+                address(this).toAccount(1), address(ALICE).toAccount(0), address(oToken), address(oToken3), 10e18
+            )
+        );
+        assertEq(pool.pauseTranche(), 0, "pauseTranche is incorrect liq 2");
+        vm.stopPrank();
+    }
+
     function test_RevertIsolatedMarketNotIsolated() public {
         vm.expectRevert("OmniPool::enterIsolatedMarket: Isolated market invalid.");
         IOmniPool(pool).enterIsolatedMarket(0, address(oToken));

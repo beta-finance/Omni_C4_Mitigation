@@ -348,8 +348,8 @@ contract OmniPool is IOmniPool, AccessControl, ReentrancyGuardUpgradeable, Pausa
         }
         Evaluation memory evalAfter = _evaluateAccountInternal(_params.targetAccountId, poolMarkets, targetAccount);
         if (evalAfter.borrowTrueValue > evalAfter.depositTrueValue) {
-            pauseTranche = borrowTier;
-            emit PausedTranche(borrowTier);
+            pauseTranche = borrowTier > pauseTranche ? pauseTranche : borrowTier;
+            emit PausedTranche(pauseTranche);
         } else if (!evalAfter.isExpired) {
             // If expired, no liquidation threshold
             require(checkSoftLiquidation(evalAfter.depositAdjValue, evalAfter.borrowAdjValue, softThreshold, targetAccount), "OmniPool::liquidate: Too much has been liquidated.");
