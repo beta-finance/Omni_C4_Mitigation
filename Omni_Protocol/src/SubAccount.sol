@@ -6,8 +6,6 @@ pragma solidity ^0.8.19;
  * @notice This library provides utility functions to handle sub-accounts using bytes32 types, where id is most significant bytes.
  */
 library SubAccount {
-    uint256 public constant ADDRESS_MASK = 0x00ffffffffffffffffffffffffffffffffffffffff;
-
     /**
      * @notice Combines an address and a sub-account identifier into a bytes32 account representation.
      * @param _sender The address component.
@@ -24,7 +22,7 @@ library SubAccount {
      * @return The address component.
      */
     function toAddress(bytes32 _account) internal pure returns (address) {
-        return address(uint160(uint256(_account) & ADDRESS_MASK));
+        return address(uint160(uint256(_account)));
     }
 
     /**
